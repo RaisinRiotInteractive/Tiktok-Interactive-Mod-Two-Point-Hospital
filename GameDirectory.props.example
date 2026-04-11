@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <!--
+      Set this to your Two Point Hospital installation folder.
+
+      Common Steam paths:
+        C:\Program Files (x86)\Steam\steamapps\common\TPH
+        D:\SteamLibrary\steamapps\common\TPH
+
+      Steps:
+        1. Copy this file and rename the copy to: GameDirectory.props
+        2. Change the path below to match your installation
+        3. GameDirectory.props is gitignored — do not commit it
+    -->
+    <GameDirectory>C:\Program Files (x86)\Steam\steamapps\common\TPH</GameDirectory>
+  </PropertyGroup>
+</Project>

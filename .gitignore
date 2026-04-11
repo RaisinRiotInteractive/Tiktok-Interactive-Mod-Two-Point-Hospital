@@ -1,0 +1,35 @@
+# Build output
+bin/
+obj/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userprefs
+*.pidb
+
+# User-specific game path — copy GameDirectory.props.example → GameDirectory.props
+GameDirectory.props
+
+# Reflection analysis / debug scratch files from development
+*.txt
+
+# Claude Code session data
+.claude/
+
+# Local NuGet cache
+local_nuget/
+
+# Library DLLs — sourced from your game installation + BepInEx
+libs/
+
+# Companion publish output
+companion/publish/
+companion/TPH_TikTokCompanion/bin/
+companion/TPH_TikTokCompanion/obj/
+
+# OS
+.DS_Store
+Thumbs.db

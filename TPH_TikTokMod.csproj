@@ -1,0 +1,68 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Import your local game path config.
+    Copy GameDirectory.props.example → GameDirectory.props and set your TPH install path.
+  -->
+  <Import Project="GameDirectory.props" Condition="Exists('GameDirectory.props')" />
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>TPH_TikTokMod</AssemblyName>
+    <Version>1.0.0</Version>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <!-- Default Steam path — override in GameDirectory.props -->
+    <GameDirectory Condition="'$(GameDirectory)' == ''">C:\Program Files (x86)\Steam\steamapps\common\TPH</GameDirectory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="companion\**" />
+    <None Remove="companion\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BepInEx.Analyzers" Version="1.0.8" PrivateAssets="all" />
+    <PackageReference Include="BepInEx.Core" Version="5.4.21" />
+    <PackageReference Include="HarmonyX" Version="2.10.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Game assemblies — sourced from your TPH installation -->
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(GameDirectory)\TPH_Data\Managed\Assembly-CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(GameDirectory)\TPH_Data\Managed\UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameDirectory)\TPH_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+
+    <!-- BepInEx core — from your TPH/BepInEx installation -->
+    <Reference Include="BepInEx">
+      <HintPath>$(GameDirectory)\BepInEx\core\BepInEx.dll</HintPath>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(GameDirectory)\BepInEx\core\0Harmony.dll</HintPath>
+    </Reference>
+
+    <!-- Unity modules -->
+    <Reference Include="UnityEngine.UnityWebRequestModule">
+      <HintPath>$(GameDirectory)\TPH_Data\Managed\UnityEngine.UnityWebRequestModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.UnityWebRequestTextureModule">
+      <HintPath>$(GameDirectory)\TPH_Data\Managed\UnityEngine.UnityWebRequestTextureModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(GameDirectory)\TPH_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(GameDirectory)\TPH_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(GameDirectory)\TPH_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>
