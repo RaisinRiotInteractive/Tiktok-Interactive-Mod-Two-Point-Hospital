@@ -19,6 +19,8 @@
   <ItemGroup>
     <Compile Remove="companion\**" />
     <None Remove="companion\**" />
+    <Compile Remove="installer\**" />
+    <None Remove="installer\**" />
   </ItemGroup>
 
   <ItemGroup>

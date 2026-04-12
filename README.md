@@ -1,4 +1,4 @@
-# TikTok Interactive Mode — Two Point Hospital
+# TikTok Interactive Mod — Two Point Hospital
 
 A BepInEx mod + companion app that connects your TikTok LIVE stream to Two Point Hospital. Followers spawn as patients or staff, likes add money, gifts trigger custom events — all configurable through the companion app without touching any code.
 
@@ -33,16 +33,31 @@ A BepInEx mod + companion app that connects your TikTok LIVE stream to Two Point
 
 ## Installation (players)
 
-1. **Install BepInEx 5.x (x64)** into your Two Point Hospital folder if you haven't already.
+### Installer — easiest option
 
-2. **Download the latest release** from the [Releases](../../releases) page.
+1. **Download `TPH_TikTokMod_vX.X.X_Installer.exe`** from the [Releases](../../releases) page.
+2. Run it — it will auto-detect your TPH folder, install BepInEx if needed, and copy all files automatically.
+3. Done. Skip to [Getting Started](#getting-started).
+
+> **Windows SmartScreen warning?**  
+> Because the installer isn't code-signed, Windows may show a blue "Windows protected your PC" dialog when you run it.  
+> This is normal for unsigned indie tools — the installer contains no malware.  
+> To proceed: click **More info**, then click **Run anyway**.
+
+---
+
+### Manual install
+
+1. **Install BepInEx 5.x (x64)** into your Two Point Hospital folder if you haven't already — [download here](https://github.com/BepInEx/BepInEx/releases).
+
+2. **Download `TPH_TikTokMod_vX.X.X_Manual.zip`** from the [Releases](../../releases) page and extract it.
 
 3. **Copy `TPH_TikTokMod.dll`** into:
    ```
    [TPH install folder]\BepInEx\plugins\
    ```
 
-4. **Extract the companion app** folder (`TPH_TikTokCompanion\`) into your TPH install folder so it sits alongside `BepInEx\`:
+4. **Copy the `TPH_TikTokCompanion\` folder** into your TPH install folder so it sits alongside `BepInEx\`:
    ```
    [TPH install folder]\
    ├── BepInEx\
@@ -50,17 +65,21 @@ A BepInEx mod + companion app that connects your TikTok LIVE stream to Two Point
    │       └── TPH_TikTokMod.dll   ← mod goes here
    ├── TPH_TikTokCompanion\
    │   └── TPH_TikTokCompanion.exe ← companion app goes here
-   └── TwoPointHospital.exe
+   └── TPH.exe
    ```
 
-5. **Start Two Point Hospital**, then **run `TPH_TikTokCompanion.exe`**.
+---
 
-6. In the companion app:
+## Getting Started
+
+1. **Start Two Point Hospital**, then **run `TPH_TikTokCompanion.exe`** from your TPH folder.
+
+2. In the companion app:
    - Enter your TikTok username (without @)
    - Configure your event rules on the **Rules** tab
    - Click **Connect** — it will only report Connected once your live stream is detected
 
-7. The **in-game overlay** (top-right corner) will show a green stripe when the companion is active. Click **Open Companion App** from there or press **F9** to toggle the overlay.
+3. The **in-game overlay** (top-right corner) will show a green stripe when the companion is active. Click **Open Companion App** from there or press **F9** to toggle the overlay.
 
 ---
 
