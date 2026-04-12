@@ -13,7 +13,7 @@ using Debug = UnityEngine.Debug;
 
 namespace TPH_TikTokMod
 {
-    [BepInPlugin("com.user.tph.tiktok", "TPH TikTok Live Integration", "1.0.0")]
+    [BepInPlugin("com.user.tph.tiktok", "TPH TikTok Live Integration", "1.1.0")]
     public class TikTokPlugin : BaseUnityPlugin
     {
         public static TikTokPlugin Instance { get; private set; }

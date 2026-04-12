@@ -308,7 +308,8 @@ namespace TPH_TikTokMod
                 // Snapshot staff before spawn so we can find the new one
                 var staffBefore = GetAllStaff();
 
-                spawnMethod.Invoke(_characterManager, new object[] { applicant, Vector3.zero, false });
+                Vector3 spawnPos = FindValidSpawnPosition(staffBefore);
+                spawnMethod.Invoke(_characterManager, new object[] { applicant, spawnPos, false });
                 Debug.Log($"[TikTokMod] SpawnStaff called: {role} '{displayName}'");
 
                 // Remove from pool so hiring market is unaffected
@@ -323,6 +324,104 @@ namespace TPH_TikTokMod
                 while (inner.InnerException != null) inner = inner.InnerException;
                 Debug.LogError($"[TikTokMod] SpawnStaffMember Error: {inner.GetType().Name}: {inner.Message}\n{inner.StackTrace}");
             }
+        }
+
+        // Find a clear world position for spawning a staff member.
+        // Samples near an existing character position so it's guaranteed to be
+        // inside the building on a walkable NavMesh tile.
+        private static Vector3 FindValidSpawnPosition(HashSet<object> existingStaff)
+        {
+            // 1. Try existing staff members
+            foreach (var s in existingStaff)
+            {
+                Vector3? pos = TryGetCharacterPosition(s);
+                if (pos.HasValue)
+                {
+                    Vector3 candidate = RandomNearby(pos.Value);
+                    UnityEngine.AI.NavMeshHit hit;
+                    if (UnityEngine.AI.NavMesh.SamplePosition(candidate, out hit, 2f, UnityEngine.AI.NavMesh.AllAreas))
+                        return hit.position;
+                    return pos.Value; // offset not on navmesh — use the exact staff position
+                }
+            }
+
+            // 2. Try existing patients
+            foreach (var p in GetAllPatients(out _))
+            {
+                Vector3? pos = TryGetCharacterPosition(p);
+                if (pos.HasValue) return pos.Value;
+            }
+
+            // 3. NavMesh sample near world origin (wide radius)
+            {
+                UnityEngine.AI.NavMeshHit hit;
+                if (UnityEngine.AI.NavMesh.SamplePosition(Vector3.zero, out hit, 100f, UnityEngine.AI.NavMesh.AllAreas))
+                    return hit.position;
+            }
+
+            // 4. Absolute fallback
+            Debug.LogWarning("[TikTokMod] FindValidSpawnPosition: could not find a valid point; using Vector3.zero");
+            return Vector3.zero;
+        }
+
+        // If a character ended up off the NavMesh (e.g. on a road or inside furniture),
+        // teleport them to the nearest walkable point.  Used as a post-spawn correction
+        // for patients who sometimes materialise at the wrong world position.
+        private static void CorrectPositionIfOffNavMesh(object character)
+        {
+            try
+            {
+                Transform t = TryGetCharacterTransform(character);
+                if (t == null) return;
+
+                UnityEngine.AI.NavMeshHit hit;
+                // If they're already on the NavMesh within 0.3 m, leave them alone
+                if (UnityEngine.AI.NavMesh.SamplePosition(t.position, out hit, 0.3f, UnityEngine.AI.NavMesh.AllAreas))
+                    return;
+
+                // They're off — find the nearest walkable point within a generous radius
+                if (UnityEngine.AI.NavMesh.SamplePosition(t.position, out hit, 50f, UnityEngine.AI.NavMesh.AllAreas))
+                {
+                    Debug.Log($"[TikTokMod] Patient off-navmesh at {t.position}; correcting to {hit.position}");
+                    t.position = hit.position;
+                    return;
+                }
+
+                // Wider fallback: use an existing character's position
+                var fallback = FindValidSpawnPosition(GetAllStaff());
+                Debug.Log($"[TikTokMod] Patient off-navmesh — using fallback position {fallback}");
+                t.position = fallback;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[TikTokMod] CorrectPositionIfOffNavMesh: {ex.Message}");
+            }
+        }
+
+        private static Vector3? TryGetCharacterPosition(object character)
+        {
+            Transform t = TryGetCharacterTransform(character);
+            return t != null ? (Vector3?)t.position : null;
+        }
+
+        private static Transform TryGetCharacterTransform(object character)
+        {
+            try
+            {
+                var ct = character.GetType();
+                return ct.GetProperty("Transform", BindingFlags.Instance | BindingFlags.Public)?.GetValue(character) as Transform
+                    ?? (ct.GetProperty("GameObject", BindingFlags.Instance | BindingFlags.Public)?.GetValue(character) as GameObject)?.transform
+                    ?? (character as Component)?.transform;
+            }
+            catch { return null; }
+        }
+
+        // Return a position within ~1 m of the source, at the same height.
+        private static Vector3 RandomNearby(Vector3 source)
+        {
+            float angle = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+            float dist  = UnityEngine.Random.Range(0.5f, 1.5f);
+            return source + new Vector3(Mathf.Cos(angle) * dist, 0f, Mathf.Sin(angle) * dist);
         }
 
         private static HashSet<object> GetAllStaff()
@@ -507,6 +606,10 @@ namespace TPH_TikTokMod
 
             // Give the patient a moment to fully initialise its components
             yield return new WaitForSeconds(1f);
+
+            // If the patient ended up off the NavMesh (e.g. stuck on the road),
+            // warp them to the nearest walkable position before anything else.
+            CorrectPositionIfOffNavMesh(newPatient);
 
             // Rename the patient
             try

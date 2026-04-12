@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>TPH_TikTokInstaller</AssemblyName>
+    <RootNamespace>TPH_TikTokInstaller</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      These are placed in Resources/ by build_release.ps1 before building the installer.
+      They are gitignored — do not commit them.
+    -->
+    <EmbeddedResource Include="Resources\TPH_TikTokMod.dll"
+                      Condition="Exists('Resources\TPH_TikTokMod.dll')" />
+    <EmbeddedResource Include="Resources\TPH_TikTokCompanion.exe"
+                      Condition="Exists('Resources\TPH_TikTokCompanion.exe')" />
+  </ItemGroup>
+
+</Project>
