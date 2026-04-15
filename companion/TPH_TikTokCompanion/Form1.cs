@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.IO.Pipes;
 using System.Net.Http;
@@ -62,8 +64,8 @@ namespace TPH_TikTokCompanion
 
         private AppConfig _config = new();
 
-        private static readonly string[] ActionNames = { "Spawn Patient", "Spawn Doctor", "Spawn Nurse", "Spawn Janitor", "Spawn Assistant", "Spawn Random", "Add Money", "Take Money", "Nothing" };
-        private static readonly string[] ActionKeys  = { "SpawnPatient",  "SpawnDoctor",  "SpawnNurse",  "SpawnJanitor",  "SpawnAssistant",  "SpawnRandom",  "AddMoney",  "TakeMoney",  "Nothing" };
+        private static readonly string[] ActionNames = { "Spawn Patient", "Spawn Doctor", "Spawn Nurse", "Spawn Janitor", "Spawn Assistant", "Spawn Random", "Add Money", "Take Money", "Kill Patient", "Fire Staff", "Nothing" };
+        private static readonly string[] ActionKeys  = { "SpawnPatient",  "SpawnDoctor",  "SpawnNurse",  "SpawnJanitor",  "SpawnAssistant",  "SpawnRandom",  "AddMoney",  "TakeMoney",  "KillPatient",  "FireStaff",  "Nothing" };
 
         private static readonly string[] SpawnableRoles = { "SpawnPatient", "SpawnDoctor", "SpawnNurse", "SpawnJanitor", "SpawnAssistant" };
         private static readonly Random _rng = new();
@@ -79,14 +81,21 @@ namespace TPH_TikTokCompanion
             : key.StartsWith("Spawn") && key != "SpawnPatient" && key != "SpawnRandom" ? key[5..] : "";
 
         // ── Theme colours ─────────────────────────────────────────────
-        static readonly Color ColBg      = Color.FromArgb(32,  34,  37);
-        static readonly Color ColCard    = Color.FromArgb(47,  49,  54);
-        static readonly Color ColInput   = Color.FromArgb(64,  68,  75);
-        static readonly Color ColText    = Color.FromArgb(220, 221, 222);
+        static readonly Color ColBg      = Color.FromArgb(18,  18,  20);
+        static readonly Color ColSidebar = Color.FromArgb(12,  12,  14);
+        static readonly Color ColCard    = Color.FromArgb(30,  31,  34);
+        static readonly Color ColInput   = Color.FromArgb(43,  45,  49);
+        static readonly Color ColBorder  = Color.FromArgb(47,  49,  54);
+        static readonly Color ColText    = Color.FromArgb(242, 243, 245);
         static readonly Color ColMuted   = Color.FromArgb(148, 155, 164);
-        static readonly Color ColAccent  = Color.FromArgb(88,  101, 242);
+        static readonly Color ColNavSel  = Color.FromArgb(53,  55,  60);
+        static readonly Color ColAccent  = Color.FromArgb(114, 137, 218);
         static readonly Color ColSuccess = Color.FromArgb(87,  242, 135);
         static readonly Color ColDanger  = Color.FromArgb(237, 66,  69);
+
+        private System.Windows.Forms.Timer? _pulseTimer;
+        private float _pulseAlpha = 1.0f;
+        private bool _pulseDown = true;
 
         // ── Known TikTok gifts for autocomplete ───────────────────────
         static readonly string[] TikTokGifts =
@@ -106,16 +115,32 @@ namespace TPH_TikTokCompanion
             "Rosa", "Rabbit", "Beer", "Coffee", "Bubble Tea", "Boxing Gloves",
             "High Five", "Lover", "Potato", "Lollipop", "Concert", "Ferris Wheel",
             "Yacht", "Private Jet", "Motorcycle", "Butterfly Sword", "Lion Dance",
-            "Love Explosion", "Falcon", "Phoenix", "Bald Eagle"
+            "Love Explosion", "Falcon", "Phoenix", "Bald Eagle",
+            "Heart Me"
         };
 
         public Form1()
         {
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
             InitializeComponent();
             LoadConfig();
             PopulateRulesUI();
-            ApplyTheme();
             UpdateUI();
+
+            _pulseTimer = new System.Windows.Forms.Timer { Interval = 50 };
+            _pulseTimer.Tick += (s, e) => {
+                if (!_connected) { _pulseAlpha = 1.0f; lblStatus.Invalidate(); return; }
+                if (_pulseDown) { _pulseAlpha -= 0.05f; if (_pulseAlpha <= 0.3f) _pulseDown = false; }
+                else { _pulseAlpha += 0.05f; if (_pulseAlpha >= 1.0f) _pulseDown = true; }
+                lblStatus.Invalidate();
+            };
+            _pulseTimer.Start();
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            Invalidate(true);
         }
 
         // ── Dark title bar (Windows 10/11) ────────────────────────────
@@ -137,44 +162,69 @@ namespace TPH_TikTokCompanion
             ForeColor = ColText;
             Font      = new System.Drawing.Font("Segoe UI", 9.5f);
 
-            tabLive.BackColor  = ColBg;
-            tabRules.BackColor = ColBg;
-
-            tabMain.DrawMode  = System.Windows.Forms.TabDrawMode.OwnerDrawFixed;
-            tabMain.DrawItem += TabMain_DrawItem;
-            tabMain.BackColor = ColBg;
-            tabMain.Padding   = new System.Drawing.Point(14, 5);
-
             ApplyThemeToControls(Controls);
+
+            // Specific overrides after generic pass
+            pnlSidebar.BackColor      = ColSidebar;
+            pnlSidebarSep.BackColor   = ColBorder;
+            pnlNavLiveAccent.BackColor  = ColAccent;
+            pnlNavRulesAccent.BackColor = ColAccent;
+            pnlContent.BackColor      = ColBg;
+            pnlLive.BackColor         = ColBg;
+            pnlRules.BackColor        = ColBg;
+            pnlConnectCard.BackColor  = ColCard;
+            pnlLogHeader.BackColor    = Color.Transparent;
+            pnlGiftButtons.BackColor  = Color.Transparent;
+
+            lblAppTitle.BackColor = ColSidebar;
+            lblAppTitle.ForeColor = ColText;
+            lblAppSub.BackColor   = ColSidebar;
+            lblAppSub.ForeColor   = ColMuted;
+            lblVersion.BackColor  = ColSidebar;
+            lblVersion.ForeColor  = ColMuted;
+            lblUsernameHint.ForeColor = ColAccent;
+            lblLogHint.ForeColor      = ColMuted;
+
+            UpdateNavStyle();
         }
 
-        private void TabMain_DrawItem(object? sender, DrawItemEventArgs e)
+        // ── Sidebar navigation ────────────────────────────────────────
+
+        private void UpdateNavStyle()
         {
-            var tab      = tabMain.TabPages[e.Index];
-            bool selected = e.Index == tabMain.SelectedIndex;
+            if (pnlLive == null || pnlNavLiveAccent == null || btnNavLive == null) return;
+            
+            bool liveActive = pnlLive.Visible;
 
-            // Fill entire tab background (covers native rendering)
-            Color bg = selected ? Color.FromArgb(54, 57, 63) : ColBg;
-            e.Graphics.FillRectangle(new System.Drawing.SolidBrush(bg), e.Bounds);
+            pnlNavLiveAccent.Visible  = liveActive;
+            btnNavLive.BackColor      = liveActive ? ColNavSel : ColSidebar;
+            btnNavLive.ForeColor      = liveActive ? ColText   : ColMuted;
+            btnNavLive.Font           = new System.Drawing.Font("Segoe UI", 9.5f, liveActive ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
+            btnNavLive.FlatAppearance.MouseOverBackColor = ColNavSel;
+            btnNavLive.FlatAppearance.BorderSize         = 0;
 
-            // Accent bar at bottom of selected tab
-            if (selected)
-            {
-                e.Graphics.FillRectangle(
-                    new System.Drawing.SolidBrush(ColAccent),
-                    e.Bounds.Left, e.Bounds.Bottom - 2, e.Bounds.Width, 2);
-            }
+            if (pnlNavRulesAccent == null || btnNavRules == null) return;
 
-            // Tab text
-            Color txt = selected ? ColText : ColMuted;
-            var fmt = new System.Drawing.StringFormat {
-                Alignment     = System.Drawing.StringAlignment.Center,
-                LineAlignment = System.Drawing.StringAlignment.Center
-            };
-            var textRect = selected
-                ? new System.Drawing.Rectangle(e.Bounds.X, e.Bounds.Y, e.Bounds.Width, e.Bounds.Height - 2)
-                : e.Bounds;
-            e.Graphics.DrawString(tab.Text, Font, new System.Drawing.SolidBrush(txt), textRect, fmt);
+            pnlNavRulesAccent.Visible = !liveActive;
+            btnNavRules.BackColor     = !liveActive ? ColNavSel : ColSidebar;
+            btnNavRules.ForeColor     = !liveActive ? ColText   : ColMuted;
+            btnNavRules.Font          = new System.Drawing.Font("Segoe UI", 9.5f, !liveActive ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
+            btnNavRules.FlatAppearance.MouseOverBackColor = ColNavSel;
+            btnNavRules.FlatAppearance.BorderSize         = 0;
+        }
+
+        private void btnNavLive_Click(object sender, EventArgs e)
+        {
+            pnlLive.Visible  = true;
+            pnlRules.Visible = false;
+            UpdateNavStyle();
+        }
+
+        private void btnNavRules_Click(object sender, EventArgs e)
+        {
+            pnlLive.Visible  = false;
+            pnlRules.Visible = true;
+            UpdateNavStyle();
         }
 
         private void ApplyThemeToControls(System.Windows.Forms.Control.ControlCollection controls)
@@ -185,13 +235,15 @@ namespace TPH_TikTokCompanion
                 {
                     case System.Windows.Forms.Button btn:
                         btn.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-                        btn.BackColor = Color.FromArgb(54, 57, 63);
-                        btn.ForeColor = ColText;
-                        btn.FlatAppearance.BorderColor        = Color.FromArgb(70, 73, 82);
+                        btn.BackColor = btn.Name.StartsWith("btnTest") ? Color.FromArgb(47, 49, 54) : 
+                                       btn.Name == "btnConnect" || btn.Name == "btnSaveRules" ? ColAccent : Color.FromArgb(54, 57, 63);
+                        btn.ForeColor = btn.Name == "btnConnect" || btn.Name == "btnSaveRules" ? Color.White : ColText;
+                        btn.FlatAppearance.BorderColor        = btn.Name == "btnConnect" || btn.Name == "btnSaveRules" ? ColAccent : Color.FromArgb(70, 73, 82);
                         btn.FlatAppearance.BorderSize         = 1;
-                        btn.FlatAppearance.MouseOverBackColor = Color.FromArgb(65, 68, 78);
+                        btn.FlatAppearance.MouseOverBackColor = btn.Name == "btnConnect" || btn.Name == "btnSaveRules" ? Color.FromArgb(ColAccent.R + 20, ColAccent.G + 20, ColAccent.B + 20) : Color.FromArgb(65, 68, 78);
                         btn.FlatAppearance.MouseDownBackColor = Color.FromArgb(44, 47, 56);
                         btn.Cursor = System.Windows.Forms.Cursors.Hand;
+                        btn.Font   = new System.Drawing.Font("Segoe UI", 9f, btn.Name == "btnConnect" || btn.Name == "btnSaveRules" ? System.Drawing.FontStyle.Bold : System.Drawing.FontStyle.Regular);
                         break;
                     case System.Windows.Forms.TextBox tb:
                         tb.BackColor   = ColInput;
@@ -202,16 +254,18 @@ namespace TPH_TikTokCompanion
                         cb.BackColor = ColInput;
                         cb.ForeColor = ColText;
                         cb.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+                        cb.Font      = new System.Drawing.Font("Segoe UI", 9f);
                         break;
                     case System.Windows.Forms.NumericUpDown nud:
                         nud.BackColor   = ColInput;
                         nud.ForeColor   = ColText;
                         nud.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+                        nud.Font        = new System.Drawing.Font("Segoe UI", 9f);
                         break;
                     case System.Windows.Forms.GroupBox gb:
                         gb.BackColor = ColCard;
-                        // Hide native text (same colour as bg) — PaintGroupBox draws our own
-                        gb.ForeColor = ColCard;
+                        gb.ForeColor = Color.Transparent; // Hide native text
+                        gb.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
                         gb.Paint    += PaintGroupBox;
                         break;
                     case System.Windows.Forms.ListBox lb:
@@ -225,10 +279,9 @@ namespace TPH_TikTokCompanion
                     case System.Windows.Forms.Label lbl:
                         lbl.BackColor = Color.Transparent;
                         lbl.ForeColor = ColText;
-                        break;
-                    case System.Windows.Forms.TabControl:
-                    case System.Windows.Forms.TabPage:
-                        c.BackColor = ColBg;
+                        if (lbl.Name == "lblStatus") {
+                            lbl.Paint += PaintStatus;
+                        }
                         break;
                     default:
                         c.BackColor = ColBg;
@@ -246,48 +299,73 @@ namespace TPH_TikTokCompanion
         {
             if (sender is not System.Windows.Forms.GroupBox gb) return;
             var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
 
-            // Fill entire client area to erase native border/text
+            // Fill background
             using var bgBrush = new System.Drawing.SolidBrush(ColCard);
-            g.FillRectangle(bgBrush, new System.Drawing.Rectangle(0, 0, gb.Width, gb.Height));
+            g.FillRectangle(bgBrush, 0, 0, gb.Width, gb.Height);
 
-            // Subtle border rectangle that starts halfway through the title area
-            const int titleH = 13;
-            var borderRect = new System.Drawing.Rectangle(0, titleH / 2, gb.Width - 1, gb.Height - titleH / 2 - 1);
-            using var borderPen = new System.Drawing.Pen(Color.FromArgb(62, 65, 74));
-            g.DrawRectangle(borderPen, borderRect);
+            // Draw header area background (slightly lighter or different)
+            const int headerH = 32;
+            using var headerBrush = new System.Drawing.SolidBrush(Color.FromArgb(ColCard.R + 5, ColCard.G + 5, ColCard.B + 7));
+            g.FillRectangle(headerBrush, 0, 0, gb.Width, headerH);
 
-            // Draw our styled title text
+            // Draw a subtle bottom border for the header
+            using var borderPen = new System.Drawing.Pen(ColBorder);
+            g.DrawLine(borderPen, 0, headerH, gb.Width, headerH);
+
+            // Draw our styled title text in the header
             if (!string.IsNullOrEmpty(gb.Text))
             {
-                using var titleFont  = new System.Drawing.Font(gb.Font.FontFamily, gb.Font.Size, System.Drawing.FontStyle.Bold);
-                using var titleBrush = new System.Drawing.SolidBrush(ColMuted);
-                var measure = g.MeasureString(gb.Text, titleFont);
-                // Blank out the border line behind the title text
-                g.FillRectangle(bgBrush, 9, 0, (int)measure.Width + 6, titleH + 2);
-                g.DrawString(gb.Text, titleFont, titleBrush, 12, 0);
+                using var titleFont  = new System.Drawing.Font("Segoe UI", 9f, System.Drawing.FontStyle.Bold);
+                using var titleBrush = new System.Drawing.SolidBrush(ColText);
+                g.DrawString(gb.Text.ToUpper(), titleFont, titleBrush, 12, (headerH - g.MeasureString(gb.Text, titleFont).Height) / 2 + 1);
+            }
+
+            // Outer border
+            g.DrawRectangle(borderPen, 0, 0, gb.Width - 1, gb.Height - 1);
+        }
+
+        private void PaintStatus(object? sender, PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            Color dotCol = _connected ? ColSuccess : _connecting ? Color.Orange : ColDanger;
+
+            // Draw pulsing dot
+            float alpha = _connected ? _pulseAlpha : 1.0f;
+            using var dotBrush = new System.Drawing.SolidBrush(Color.FromArgb((int)(alpha * 255), dotCol));
+            g.FillEllipse(dotBrush, 0, 4, 8, 8); // Moved to x=0
+
+            // Draw outer glow for dot if connected
+            if (_connected)
+            {
+                using var glowPen = new System.Drawing.Pen(Color.FromArgb((int)(_pulseAlpha * 100), dotCol), 2);
+                g.DrawEllipse(glowPen, -1, 3, 10, 10);
             }
         }
 
         private static void StyleDataGridView(System.Windows.Forms.DataGridView dgv)
         {
-            dgv.BackgroundColor                                  = Color.FromArgb(44, 47, 52);
+            dgv.BackgroundColor                                  = ColCard;
             dgv.BorderStyle                                      = System.Windows.Forms.BorderStyle.None;
-            dgv.GridColor                                        = Color.FromArgb(56, 59, 66);
-            dgv.DefaultCellStyle.BackColor                       = Color.FromArgb(47, 49, 54);
-            dgv.DefaultCellStyle.ForeColor                       = Color.FromArgb(220, 221, 222);
-            dgv.DefaultCellStyle.SelectionBackColor              = Color.FromArgb(88, 101, 242);
+            dgv.GridColor                                        = ColBorder;
+            dgv.DefaultCellStyle.BackColor                       = ColCard;
+            dgv.DefaultCellStyle.ForeColor                       = ColText;
+            dgv.DefaultCellStyle.SelectionBackColor              = ColAccent;
             dgv.DefaultCellStyle.SelectionForeColor              = Color.White;
-            dgv.DefaultCellStyle.Padding                         = new System.Windows.Forms.Padding(2, 0, 2, 0);
-            dgv.AlternatingRowsDefaultCellStyle.BackColor        = Color.FromArgb(40, 43, 48);
-            dgv.ColumnHeadersDefaultCellStyle.BackColor          = Color.FromArgb(36, 38, 43);
-            dgv.ColumnHeadersDefaultCellStyle.ForeColor          = Color.FromArgb(148, 155, 164);
-            dgv.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(36, 38, 43);
+            dgv.DefaultCellStyle.Padding                         = new System.Windows.Forms.Padding(4, 0, 4, 0);
+            dgv.AlternatingRowsDefaultCellStyle.BackColor        = Color.FromArgb(ColCard.R + 3, ColCard.G + 3, ColCard.B + 4);
+            dgv.ColumnHeadersDefaultCellStyle.BackColor          = Color.FromArgb(ColCard.R + 5, ColCard.G + 5, ColCard.B + 7);
+            dgv.ColumnHeadersDefaultCellStyle.ForeColor          = ColText;
+            dgv.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(ColCard.R + 5, ColCard.G + 5, ColCard.B + 7);
             dgv.ColumnHeadersDefaultCellStyle.Font               = new System.Drawing.Font("Segoe UI", 8.5f, System.Drawing.FontStyle.Bold);
             dgv.ColumnHeadersBorderStyle                         = System.Windows.Forms.DataGridViewHeaderBorderStyle.Single;
             dgv.EnableHeadersVisualStyles                        = false;
             dgv.CellBorderStyle                                  = System.Windows.Forms.DataGridViewCellBorderStyle.SingleHorizontal;
-            dgv.RowsDefaultCellStyle.BackColor                   = Color.FromArgb(47, 49, 54);
+            dgv.RowsDefaultCellStyle.BackColor                   = ColCard;
+            dgv.RowTemplate.Height                               = 32;
         }
 
         // ── Gift autocomplete ─────────────────────────────────────────
@@ -635,8 +713,10 @@ namespace TPH_TikTokCompanion
                 string filePath = await DownloadAvatarAsPngAsync(avatarUrl);
                 SendCommand($"SPAWNSTAFF:{role}|{displayName}|{filePath}");
             }
-            else if (action == "AddMoney")  SendCommand($"MONEY:{rule.Amount}");
-            else if (action == "TakeMoney") SendCommand($"MONEY:{-rule.Amount}");
+            else if (action == "AddMoney")    SendCommand($"MONEY:{rule.Amount}");
+            else if (action == "TakeMoney")   SendCommand($"MONEY:{-rule.Amount}");
+            else if (action == "KillPatient") SendCommand("KILLPATIENT");
+            else if (action == "FireStaff")   SendCommand("FIRESTAFF");
         }
 
         // Downloads any avatar URL and converts it to a temp PNG file using WIC.
@@ -743,6 +823,18 @@ namespace TPH_TikTokCompanion
             Log("[Test] Spawning Assistant");
         }
 
+        private void btnKillPatient_Click(object sender, EventArgs e)
+        {
+            SendCommand("KILLPATIENT");
+            Log("[Test] Killing random patient");
+        }
+
+        private void btnFireStaff_Click(object sender, EventArgs e)
+        {
+            SendCommand("FIRESTAFF");
+            Log("[Test] Firing random staff member");
+        }
+
         // ── Helpers ───────────────────────────────────────────────────
 
         private static readonly string LogFilePath =
@@ -781,7 +873,7 @@ namespace TPH_TikTokCompanion
                 btnConnect.FlatAppearance.BorderColor        = Color.FromArgb(180, 150, 30);
                 btnConnect.FlatAppearance.MouseOverBackColor = Color.FromArgb(120, 100, 20);
                 btnConnect.FlatAppearance.MouseDownBackColor = Color.FromArgb(70,  60, 10);
-                lblStatus.Text      = $"◌ Connecting to @{txtUsername.Text.Trim()}...";
+                lblStatus.Text      = $"Connecting to @{txtUsername.Text.Trim()}...";
                 lblStatus.ForeColor = Color.FromArgb(220, 180, 50);
             }
             else if (_connected)
@@ -792,7 +884,7 @@ namespace TPH_TikTokCompanion
                 btnConnect.FlatAppearance.BorderColor        = ColDanger;
                 btnConnect.FlatAppearance.MouseOverBackColor = Color.FromArgb(200, 50, 52);
                 btnConnect.FlatAppearance.MouseDownBackColor = Color.FromArgb(170, 40, 42);
-                lblStatus.Text      = $"● Live: @{txtUsername.Text.Trim()}";
+                lblStatus.Text      = $"Live: @{txtUsername.Text.Trim()}";
                 lblStatus.ForeColor = ColSuccess;
             }
             else
@@ -803,7 +895,7 @@ namespace TPH_TikTokCompanion
                 btnConnect.FlatAppearance.BorderColor        = ColAccent;
                 btnConnect.FlatAppearance.MouseOverBackColor = Color.FromArgb(110, 120, 255);
                 btnConnect.FlatAppearance.MouseDownBackColor = Color.FromArgb(70,   85, 210);
-                lblStatus.Text      = "○ Not connected";
+                lblStatus.Text      = "Not connected";
                 lblStatus.ForeColor = ColMuted;
             }
 

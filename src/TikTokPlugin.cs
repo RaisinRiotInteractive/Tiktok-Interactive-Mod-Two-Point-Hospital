@@ -13,7 +13,7 @@ using Debug = UnityEngine.Debug;
 
 namespace TPH_TikTokMod
 {
-    [BepInPlugin("com.user.tph.tiktok", "TPH TikTok Live Integration", "1.1.0")]
+    [BepInPlugin("com.user.tph.tiktok", "TPH TikTok Live Integration", "1.2.0")]
     public class TikTokPlugin : BaseUnityPlugin
     {
         public static TikTokPlugin Instance { get; private set; }
@@ -54,6 +54,7 @@ namespace TPH_TikTokMod
             {
                 var harmony = new Harmony("com.user.tph.tiktok");
                 harmony.PatchAll();
+                Patches.LevelLifecyclePatcher.TryPatchFreshStart(harmony);
                 Debug.Log("[TikTokMod] Harmony patches applied");
             }
             catch (Exception ex)
@@ -63,6 +64,8 @@ namespace TPH_TikTokMod
 
             _cts = new CancellationTokenSource();
             Task.Run(() => ListenForCommands(_cts.Token));
+
+            InvokeRepeating(nameof(CleanupOrphanedCharacters), 30f, 30f);
 
             Logger.LogInfo("TPH TikTok Mod Loaded! Listening for companion app commands.");
             Debug.Log("[TikTokMod] Awake() complete");
@@ -123,6 +126,21 @@ namespace TPH_TikTokMod
                 {
                     Debug.Log("[TikTokMod] Re-initialising GameInterface");
                     GameInterface.Initialise();
+                }
+                else if (command == "GHOST")
+                {
+                    Debug.Log("[TikTokMod] Summoning ghost");
+                    GameInterface.SpawnGhost();
+                }
+                else if (command == "KILLPATIENT")
+                {
+                    Debug.Log("[TikTokMod] Killing random patient");
+                    GameInterface.KillRandomPatient();
+                }
+                else if (command == "FIRESTAFF")
+                {
+                    Debug.Log("[TikTokMod] Firing random staff member");
+                    GameInterface.FireRandomStaff();
                 }
                 else if (command.StartsWith("SPAWNSTAFF:"))
                 {
@@ -222,6 +240,11 @@ namespace TPH_TikTokMod
                 Debug.LogWarning($"[TikTokMod] Avatar file decode failed: {path}");
                 UnityEngine.Object.Destroy(tex);
             }
+        }
+
+        private void CleanupOrphanedCharacters()
+        {
+            GameInterface.CleanupOrphanedCharacters();
         }
 
         // Run an action on Unity's main thread via Update()

@@ -16,6 +16,11 @@ namespace TPH_TikTokMod
         private static object _characterManager;
         private static bool _initialised = false;
 
+        // ── Orphan tracking ───────────────────────────────────────────────
+        // Characters spawned by this mod; cleaned up if the game de-lists them.
+        private static readonly Dictionary<object, string> _trackedChars
+            = new Dictionary<object, string>(); // character → display name
+
         // ── Avatar persistence ────────────────────────────────────────────
         // Keyed by character ID string → (displayName, charType)
         private static readonly Dictionary<string, (string name, string type)> _avatarMap
@@ -99,7 +104,7 @@ namespace TPH_TikTokMod
 
         public static void ReapplyAllAvatars(TikTokPlugin plugin)
         {
-            if (!_initialised) Initialise();
+            EnsureValid();
             if (_characterManager == null) return;
             LoadAvatarMapping();
             if (_avatarMap.Count == 0) return;
@@ -143,6 +148,73 @@ namespace TPH_TikTokMod
             }
         }
 
+        // Destroy Unity GameObjects for mod-spawned characters that the game has
+        // de-listed (AI failure, bad-state cleanup, etc.) so they stop appearing
+        // as visually stuck ghosts.
+        public static void CleanupOrphanedCharacters()
+        {
+            if (!_initialised || _trackedChars.Count == 0) return;
+
+            var patients = GetAllPatients(out _);
+            var staff    = GetAllStaff();
+            var active   = new HashSet<object>(patients);
+            foreach (var s in staff) active.Add(s);
+
+            var orphans = new List<object>();
+            foreach (var kv in _trackedChars)
+                if (!active.Contains(kv.Key)) orphans.Add(kv.Key);
+
+            foreach (var orphan in orphans)
+            {
+                try
+                {
+                    var go = GetCharacterGameObject(orphan);
+                    if (go != null && go != null)
+                    {
+                        Debug.Log($"[TikTokMod] Destroying orphaned character GameObject: '{_trackedChars[orphan]}'");
+                        UnityEngine.Object.Destroy(go);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[TikTokMod] Orphan cleanup error for '{_trackedChars[orphan]}': {ex.Message}");
+                }
+                _trackedChars.Remove(orphan);
+            }
+
+            if (orphans.Count > 0)
+                Debug.Log($"[TikTokMod] Cleaned up {orphans.Count} orphaned character(s).");
+        }
+
+        private static GameObject GetCharacterGameObject(object character)
+        {
+            try
+            {
+                var ct = character.GetType();
+                var go = ct.GetProperty("GameObject", BindingFlags.Instance | BindingFlags.Public)
+                           ?.GetValue(character) as GameObject;
+                if (go != null) return go;
+
+                var t = ct.GetProperty("Transform", BindingFlags.Instance | BindingFlags.Public)
+                          ?.GetValue(character) as Transform;
+                if (t != null) return t.gameObject;
+
+                return (character as Component)?.gameObject;
+            }
+            catch { return null; }
+        }
+
+        // Always re-initialise before any spawn or money call.
+        // Caching _level/_characterManager across level resets is unreliable:
+        // TH20.Level may be a plain C# class (not UnityEngine.Object), so Unity's
+        // destroyed-object null check doesn't apply and stale references go undetected.
+        // Initialise() is ~10 reflection calls — sub-millisecond — so calling it every
+        // time is safe and guarantees fresh references after any reset or reload.
+        private static void EnsureValid()
+        {
+            Initialise();
+        }
+
         public static void Initialise()
         {
             try
@@ -180,7 +252,7 @@ namespace TPH_TikTokMod
 
         public static void AddMoney(int amount)
         {
-            if (!_initialised) Initialise();
+            EnsureValid();
             if (_financeManager == null) return;
 
             try
@@ -217,7 +289,7 @@ namespace TPH_TikTokMod
 
         public static void SpawnStaffMember(string role, string displayName, string avatarPath, TikTokPlugin plugin)
         {
-            if (!_initialised) Initialise();
+            EnsureValid();
             if (_characterManager == null)
             {
                 Debug.LogWarning("[TikTokMod] CharacterManager not ready for staff spawn.");
@@ -312,11 +384,16 @@ namespace TPH_TikTokMod
                 spawnMethod.Invoke(_characterManager, new object[] { applicant, spawnPos, false });
                 Debug.Log($"[TikTokMod] SpawnStaff called: {role} '{displayName}'");
 
-                // Remove from pool so hiring market is unaffected
-                removeApplicant?.Invoke(pool, new object[] { applicant });
+                // Capture the remove action but defer it: calling it immediately after SpawnStaff
+                // can corrupt the staff member's hire record if the game still references the
+                // applicant during async initialisation, causing the staff to be de-listed
+                // while their GameObject remains (visible-but-stuck ghost).
+                Action removeAction = removeApplicant != null
+                    ? () => removeApplicant.Invoke(pool, new object[] { applicant })
+                    : (Action)null;
 
                 // Wait for the new staff member to appear, then name + decorate
-                plugin.StartCoroutine(WaitAndDecorateStaff(staffBefore, displayName, avatarPath, plugin));
+                plugin.StartCoroutine(WaitAndDecorateStaff(staffBefore, displayName, avatarPath, plugin, removeAction));
             }
             catch (Exception ex)
             {
@@ -436,7 +513,8 @@ namespace TPH_TikTokMod
         }
 
         private static IEnumerator WaitAndDecorateStaff(
-            HashSet<object> staffBefore, string displayName, string avatarPath, TikTokPlugin plugin)
+            HashSet<object> staffBefore, string displayName, string avatarPath, TikTokPlugin plugin,
+            Action onFound = null)
         {
             float elapsed = 0f;
             object newStaff = null;
@@ -458,6 +536,13 @@ namespace TPH_TikTokMod
                 Debug.LogWarning($"[TikTokMod] New staff member not found within 30 s.");
                 yield break;
             }
+
+            // Staff confirmed in list — safe to remove from applicant pool now.
+            try { onFound?.Invoke(); }
+            catch (Exception ex) { Debug.LogWarning($"[TikTokMod] removeApplicant deferred call failed: {ex.Message}"); }
+
+            // Register for orphan tracking
+            _trackedChars[newStaff] = displayName;
 
             yield return new WaitForSeconds(1f);
 
@@ -482,7 +567,7 @@ namespace TPH_TikTokMod
 
         public static void SpawnFollowerPatient(string displayName, string avatarUrl, TikTokPlugin plugin)
         {
-            if (!_initialised) Initialise();
+            EnsureValid();
             if (_characterManager == null)
             {
                 Debug.LogWarning("[TikTokMod] CharacterManager not ready — is a hospital loaded?");
@@ -604,6 +689,9 @@ namespace TPH_TikTokMod
                 yield break;
             }
 
+            // Register for orphan tracking
+            _trackedChars[newPatient] = displayName;
+
             // Give the patient a moment to fully initialise its components
             yield return new WaitForSeconds(1f);
 
@@ -632,6 +720,131 @@ namespace TPH_TikTokMod
                     AttachAvatarBillboard(newPatient, tex, displayName));
             }
         }
+
+        // ── Ghost / Kill / Fire ───────────────────────────────────────
+
+        public static void SpawnGhost()
+        {
+            EnsureValid();
+            if (_characterManager == null) { Debug.LogWarning("[TikTokMod] CharacterManager not ready for ghost spawn."); return; }
+            try
+            {
+                var cmType = _characterManager.GetType();
+
+                // Try the most likely method names for spawning a ghost
+                foreach (var name in new[] { "SpawnRandomGhost", "SpawnGhostFromCharacter", "SpawnGhost", "CreateGhost", "AddGhost", "SpawnNewGhost" })
+                {
+                    var m = cmType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                                  .FirstOrDefault(x => x.Name == name);
+                    if (m == null) continue;
+
+                    var parms  = m.GetParameters();
+                    var args   = new object[parms.Length]; // nulls / defaults are fine for optional params
+                    // First param is often a position
+                    if (parms.Length > 0 && parms[0].ParameterType == typeof(Vector3))
+                        args[0] = FindValidSpawnPosition(GetAllStaff());
+
+                    m.Invoke(_characterManager, args);
+                    Debug.Log($"[TikTokMod] Ghost spawned via {name}()");
+                    return;
+                }
+
+                Debug.LogWarning("[TikTokMod] SpawnGhost: no suitable method found on CharacterManager. " +
+                    "Available public methods: " +
+                    string.Join(", ", cmType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                        .Where(x => x.Name.ToLower().Contains("ghost") || x.Name.ToLower().Contains("spirit"))
+                        .Select(x => x.Name)));
+            }
+            catch (Exception ex) { Debug.LogError($"[TikTokMod] SpawnGhost Error: {ex.Message}"); }
+        }
+
+        public static void KillRandomPatient()
+        {
+            EnsureValid();
+            if (_characterManager == null) { Debug.LogWarning("[TikTokMod] CharacterManager not ready."); return; }
+            try
+            {
+                var patients = GetAllPatients(out _).ToList();
+                if (patients.Count == 0) { Debug.LogWarning("[TikTokMod] KillRandomPatient: no patients found."); return; }
+
+                var target = patients[UnityEngine.Random.Range(0, patients.Count)];
+                var pt     = target.GetType();
+
+                // Try common kill method names
+                foreach (var name in new[] { "Kill", "Die", "ForceDie", "SetDead", "Death", "ForceKill" })
+                {
+                    var m = pt.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                               .FirstOrDefault(x => x.Name == name && x.GetParameters().Length == 0);
+                    if (m == null) continue;
+                    m.Invoke(target, null);
+                    Debug.Log($"[TikTokMod] Killed patient via {pt.Name}.{name}()");
+                    return;
+                }
+
+                // Fallback: set health to 0 via property
+                var healthProp = pt.GetProperty("Health", BindingFlags.Instance | BindingFlags.Public)
+                              ?? pt.GetProperty("CurrentHealth", BindingFlags.Instance | BindingFlags.Public);
+                if (healthProp != null && healthProp.CanWrite)
+                {
+                    healthProp.SetValue(target, Convert.ChangeType(0, healthProp.PropertyType));
+                    Debug.Log($"[TikTokMod] Set patient health to 0 via {healthProp.Name}");
+                    return;
+                }
+
+                Debug.LogWarning("[TikTokMod] KillRandomPatient: no kill method found. " +
+                    "Available methods containing 'kill'/'die'/'death': " +
+                    string.Join(", ", pt.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                        .Where(x => x.Name.ToLower().Contains("kill") || x.Name.ToLower().Contains("die") || x.Name.ToLower().Contains("death"))
+                        .Select(x => x.Name)));
+            }
+            catch (Exception ex) { Debug.LogError($"[TikTokMod] KillRandomPatient Error: {ex.Message}"); }
+        }
+
+        public static void FireRandomStaff()
+        {
+            EnsureValid();
+            if (_characterManager == null) { Debug.LogWarning("[TikTokMod] CharacterManager not ready."); return; }
+            try
+            {
+                var staff = GetAllStaff().ToList();
+                if (staff.Count == 0) { Debug.LogWarning("[TikTokMod] FireRandomStaff: no staff found."); return; }
+
+                var target = staff[UnityEngine.Random.Range(0, staff.Count)];
+                var st     = target.GetType();
+
+                // Try common fire/dismiss method names
+                foreach (var name in new[] { "Fire", "Dismiss", "Sack", "Remove", "Fired", "ForceFire", "ForceDismiss" })
+                {
+                    var m = st.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                               .FirstOrDefault(x => x.Name == name && x.GetParameters().Length == 0);
+                    if (m == null) continue;
+                    m.Invoke(target, null);
+                    Debug.Log($"[TikTokMod] Staff fired via {st.Name}.{name}()");
+                    return;
+                }
+
+                // Fallback: try CharacterManager.FireStaff(staff)
+                var cmType = _characterManager.GetType();
+                foreach (var name in new[] { "FireStaff", "DismissStaff", "RemoveStaff", "SackStaff" })
+                {
+                    var m = cmType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                                  .FirstOrDefault(x => x.Name == name && x.GetParameters().Length == 1);
+                    if (m == null) continue;
+                    m.Invoke(_characterManager, new[] { target });
+                    Debug.Log($"[TikTokMod] Staff fired via CharacterManager.{name}()");
+                    return;
+                }
+
+                Debug.LogWarning("[TikTokMod] FireRandomStaff: no fire method found. " +
+                    "Available methods containing 'fire'/'dismiss'/'sack': " +
+                    string.Join(", ", st.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                        .Where(x => x.Name.ToLower().Contains("fire") || x.Name.ToLower().Contains("dismiss") || x.Name.ToLower().Contains("sack"))
+                        .Select(x => x.Name)));
+            }
+            catch (Exception ex) { Debug.LogError($"[TikTokMod] FireRandomStaff Error: {ex.Message}"); }
+        }
+
+        private static List<object> ToList(HashSet<object> set) => new List<object>(set);
 
         private static void AttachAvatarBillboard(object patient, Texture2D tex, string displayName)
         {
