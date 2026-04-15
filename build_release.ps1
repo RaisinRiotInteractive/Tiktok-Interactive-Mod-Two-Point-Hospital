@@ -127,7 +127,7 @@ if ($CreateRelease)
     Step "Creating GitHub release v$Version..."
 
     $Notes = @"
-## TikTok Live Mod for Two Point Hospital — v$Version
+## TikTok Live Mod for Two Point Hospital - v$Version
 
 ### Install options
 | | |
@@ -155,7 +155,7 @@ The in-game overlay (top-right corner) shows the connection status. Press **F9**
     gh release create "v$Version" `
         $InstallerFinal `
         $ZipPath `
-        --title "v$Version" `
+        --title "TikTok Live Mod for Two Point Hospital - v$Version" `
         --notes $Notes
 
     OK "GitHub release v$Version created."
