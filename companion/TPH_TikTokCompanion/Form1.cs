@@ -715,8 +715,16 @@ namespace TPH_TikTokCompanion
             }
             else if (action == "AddMoney")    SendCommand($"MONEY:{rule.Amount}");
             else if (action == "TakeMoney")   SendCommand($"MONEY:{-rule.Amount}");
-            else if (action == "KillPatient") SendCommand("KILLPATIENT");
-            else if (action == "FireStaff")   SendCommand("FIRESTAFF");
+            else if (action == "KillPatient")
+            {
+                string filePath = await DownloadAvatarAsPngAsync(avatarUrl);
+                SendCommand($"KILLPATIENT:{displayName}|{filePath}");
+            }
+            else if (action == "FireStaff")
+            {
+                string filePath = await DownloadAvatarAsPngAsync(avatarUrl);
+                SendCommand($"FIRESTAFF:{displayName}|{filePath}");
+            }
         }
 
         // Downloads any avatar URL and converts it to a temp PNG file using WIC.

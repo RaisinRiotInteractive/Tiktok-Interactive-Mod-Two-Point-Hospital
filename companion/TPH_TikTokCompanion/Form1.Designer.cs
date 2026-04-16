@@ -15,6 +15,8 @@ namespace TPH_TikTokCompanion
             // ══════════════════════════════════════════════════════════
             // FORM SETUP
             // ══════════════════════════════════════════════════════════
+            AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
+            AutoScaleMode       = System.Windows.Forms.AutoScaleMode.Font;
             ClientSize      = new System.Drawing.Size(850, 750);
             MinimumSize     = new System.Drawing.Size(800, 600);
             Text            = "TPH TikTok Live Mod";
@@ -295,7 +297,7 @@ namespace TPH_TikTokCompanion
             lblFollowActionHint.Text = "Action:";
             lblFollowActionHint.Location = new System.Drawing.Point(15, 45);
             lblFollowActionHint.AutoSize = true;
-            cmbFollowAction.Location = new System.Drawing.Point(70, 42);
+            cmbFollowAction.Location = new System.Drawing.Point(85, 42);
             cmbFollowAction.Size = new System.Drawing.Size(180, 23);
             cmbFollowAction.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             cmbFollowAction.SelectedIndexChanged += cmbFollowAction_SelectedIndexChanged;
@@ -320,7 +322,7 @@ namespace TPH_TikTokCompanion
             lblLikeActionHint.Text = "Action:";
             lblLikeActionHint.Location = new System.Drawing.Point(15, 45);
             lblLikeActionHint.AutoSize = true;
-            cmbLikeAction.Location = new System.Drawing.Point(70, 42);
+            cmbLikeAction.Location = new System.Drawing.Point(85, 42);
             cmbLikeAction.Size = new System.Drawing.Size(180, 23);
             cmbLikeAction.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             cmbLikeAction.SelectedIndexChanged += cmbLikeAction_SelectedIndexChanged;
@@ -337,7 +339,7 @@ namespace TPH_TikTokCompanion
             lblLikeThreshold.Text = "Trigger every:";
             lblLikeThreshold.Location = new System.Drawing.Point(15, 80);
             lblLikeThreshold.AutoSize = true;
-            cmbLikeThreshold.Location = new System.Drawing.Point(100, 77);
+            cmbLikeThreshold.Location = new System.Drawing.Point(120, 77);
             cmbLikeThreshold.Size = new System.Drawing.Size(150, 23);
             cmbLikeThreshold.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
 
@@ -373,7 +375,7 @@ namespace TPH_TikTokCompanion
             lblDefaultGift.Text = "Default:";
             lblDefaultGift.Location = new System.Drawing.Point(220, 11);
             lblDefaultGift.AutoSize = true;
-            cmbDefaultGiftAction.Location = new System.Drawing.Point(275, 8);
+            cmbDefaultGiftAction.Location = new System.Drawing.Point(290, 8);
             cmbDefaultGiftAction.Size = new System.Drawing.Size(130, 23);
             cmbDefaultGiftAction.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             cmbDefaultGiftAction.SelectedIndexChanged += cmbDefaultGiftAction_SelectedIndexChanged;

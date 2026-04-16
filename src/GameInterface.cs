@@ -758,7 +758,7 @@ namespace TPH_TikTokMod
             catch (Exception ex) { Debug.LogError($"[TikTokMod] SpawnGhost Error: {ex.Message}"); }
         }
 
-        public static void KillRandomPatient()
+        public static void KillRandomPatient(string triggerName = "", string avatarPath = "", TikTokPlugin plugin = null)
         {
             EnsureValid();
             if (_characterManager == null) { Debug.LogWarning("[TikTokMod] CharacterManager not ready."); return; }
@@ -770,6 +770,11 @@ namespace TPH_TikTokMod
                 var target = patients[UnityEngine.Random.Range(0, patients.Count)];
                 var pt     = target.GetType();
 
+                // Capture position now — the character may be removed after dying
+                Vector3? killPos = TryGetCharacterPosition(target);
+
+                bool killed = false;
+
                 // Try common kill method names
                 foreach (var name in new[] { "Kill", "Die", "ForceDie", "SetDead", "Death", "ForceKill" })
                 {
@@ -778,29 +783,40 @@ namespace TPH_TikTokMod
                     if (m == null) continue;
                     m.Invoke(target, null);
                     Debug.Log($"[TikTokMod] Killed patient via {pt.Name}.{name}()");
-                    return;
+                    killed = true;
+                    break;
                 }
 
-                // Fallback: set health to 0 via property
-                var healthProp = pt.GetProperty("Health", BindingFlags.Instance | BindingFlags.Public)
-                              ?? pt.GetProperty("CurrentHealth", BindingFlags.Instance | BindingFlags.Public);
-                if (healthProp != null && healthProp.CanWrite)
+                if (!killed)
                 {
-                    healthProp.SetValue(target, Convert.ChangeType(0, healthProp.PropertyType));
-                    Debug.Log($"[TikTokMod] Set patient health to 0 via {healthProp.Name}");
+                    // Fallback: set health to 0 via property
+                    var healthProp = pt.GetProperty("Health", BindingFlags.Instance | BindingFlags.Public)
+                                  ?? pt.GetProperty("CurrentHealth", BindingFlags.Instance | BindingFlags.Public);
+                    if (healthProp != null && healthProp.CanWrite)
+                    {
+                        healthProp.SetValue(target, Convert.ChangeType(0, healthProp.PropertyType));
+                        Debug.Log($"[TikTokMod] Set patient health to 0 via {healthProp.Name}");
+                        killed = true;
+                    }
+                }
+
+                if (!killed)
+                {
+                    Debug.LogWarning("[TikTokMod] KillRandomPatient: no kill method found. " +
+                        "Available methods containing 'kill'/'die'/'death': " +
+                        string.Join(", ", pt.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                            .Where(x => x.Name.ToLower().Contains("kill") || x.Name.ToLower().Contains("die") || x.Name.ToLower().Contains("death"))
+                            .Select(x => x.Name)));
                     return;
                 }
 
-                Debug.LogWarning("[TikTokMod] KillRandomPatient: no kill method found. " +
-                    "Available methods containing 'kill'/'die'/'death': " +
-                    string.Join(", ", pt.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                        .Where(x => x.Name.ToLower().Contains("kill") || x.Name.ToLower().Contains("die") || x.Name.ToLower().Contains("death"))
-                        .Select(x => x.Name)));
+                if (!string.IsNullOrEmpty(triggerName) && !string.IsNullOrEmpty(avatarPath) && plugin != null && killPos.HasValue)
+                    plugin.StartCoroutine(ShowEventBillboard(killPos.Value + Vector3.up * 2.8f, triggerName, avatarPath, plugin));
             }
             catch (Exception ex) { Debug.LogError($"[TikTokMod] KillRandomPatient Error: {ex.Message}"); }
         }
 
-        public static void FireRandomStaff()
+        public static void FireRandomStaff(string triggerName = "", string avatarPath = "", TikTokPlugin plugin = null)
         {
             EnsureValid();
             if (_characterManager == null) { Debug.LogWarning("[TikTokMod] CharacterManager not ready."); return; }
@@ -812,6 +828,11 @@ namespace TPH_TikTokMod
                 var target = staff[UnityEngine.Random.Range(0, staff.Count)];
                 var st     = target.GetType();
 
+                // Capture position now — the character may be removed after being fired
+                Vector3? firePos = TryGetCharacterPosition(target);
+
+                bool fired = false;
+
                 // Try common fire/dismiss method names
                 foreach (var name in new[] { "Fire", "Dismiss", "Sack", "Remove", "Fired", "ForceFire", "ForceDismiss" })
                 {
@@ -820,28 +841,75 @@ namespace TPH_TikTokMod
                     if (m == null) continue;
                     m.Invoke(target, null);
                     Debug.Log($"[TikTokMod] Staff fired via {st.Name}.{name}()");
-                    return;
+                    fired = true;
+                    break;
                 }
 
-                // Fallback: try CharacterManager.FireStaff(staff)
-                var cmType = _characterManager.GetType();
-                foreach (var name in new[] { "FireStaff", "DismissStaff", "RemoveStaff", "SackStaff" })
+                if (!fired)
                 {
-                    var m = cmType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
-                                  .FirstOrDefault(x => x.Name == name && x.GetParameters().Length == 1);
-                    if (m == null) continue;
-                    m.Invoke(_characterManager, new[] { target });
-                    Debug.Log($"[TikTokMod] Staff fired via CharacterManager.{name}()");
+                    // Fallback: try CharacterManager.FireStaff(staff)
+                    var cmType = _characterManager.GetType();
+                    foreach (var name in new[] { "FireStaff", "DismissStaff", "RemoveStaff", "SackStaff" })
+                    {
+                        var m = cmType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                                      .FirstOrDefault(x => x.Name == name && x.GetParameters().Length == 1);
+                        if (m == null) continue;
+                        m.Invoke(_characterManager, new[] { target });
+                        Debug.Log($"[TikTokMod] Staff fired via CharacterManager.{name}()");
+                        fired = true;
+                        break;
+                    }
+                }
+
+                if (!fired)
+                {
+                    Debug.LogWarning("[TikTokMod] FireRandomStaff: no fire method found. " +
+                        "Available methods containing 'fire'/'dismiss'/'sack': " +
+                        string.Join(", ", st.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+                            .Where(x => x.Name.ToLower().Contains("fire") || x.Name.ToLower().Contains("dismiss") || x.Name.ToLower().Contains("sack"))
+                            .Select(x => x.Name)));
                     return;
                 }
 
-                Debug.LogWarning("[TikTokMod] FireRandomStaff: no fire method found. " +
-                    "Available methods containing 'fire'/'dismiss'/'sack': " +
-                    string.Join(", ", st.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                        .Where(x => x.Name.ToLower().Contains("fire") || x.Name.ToLower().Contains("dismiss") || x.Name.ToLower().Contains("sack"))
-                        .Select(x => x.Name)));
+                if (!string.IsNullOrEmpty(triggerName) && !string.IsNullOrEmpty(avatarPath) && plugin != null && firePos.HasValue)
+                    plugin.StartCoroutine(ShowEventBillboard(firePos.Value + Vector3.up * 2.8f, triggerName, avatarPath, plugin));
             }
             catch (Exception ex) { Debug.LogError($"[TikTokMod] FireRandomStaff Error: {ex.Message}"); }
+        }
+
+        // Shows a flashing red avatar billboard at worldPos for 5 seconds.
+        // Used to display the TikTok user who triggered a kill/fire event.
+        private static IEnumerator ShowEventBillboard(Vector3 worldPos, string triggerName, string avatarPath, TikTokPlugin plugin)
+        {
+            yield return null; // one frame so the kill/fire animation can start first
+
+            plugin.LoadTextureFromFile(avatarPath, tex =>
+            {
+                try
+                {
+                    var billboard = new GameObject("TikTokEventBillboard_" + triggerName);
+                    billboard.transform.position = worldPos;
+
+                    var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                    quad.transform.SetParent(billboard.transform, false);
+                    quad.transform.localPosition = Vector3.zero;
+                    quad.transform.localScale    = new Vector3(2f, 2f, 2f);
+
+                    var rend = quad.GetComponent<MeshRenderer>();
+                    var mat  = new Material(Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Texture"));
+                    mat.mainTexture = tex;
+                    rend.material   = mat;
+
+                    var flash = billboard.AddComponent<FlashRedBillboard>();
+                    flash.Mat = mat;
+
+                    Debug.Log($"[TikTokMod] Flashing billboard shown for trigger: {triggerName}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[TikTokMod] ShowEventBillboard error: {ex.Message}");
+                }
+            });
         }
 
         private static List<object> ToList(HashSet<object> set) => new List<object>(set);
@@ -919,6 +987,47 @@ namespace TPH_TikTokMod
         {
             if (Camera.main != null)
                 transform.forward = Camera.main.transform.forward;
+        }
+    }
+
+    // Faces the camera, flashes red for 5 seconds, then destroys itself.
+    // Used for kill/fire trigger billboards.
+    public class FlashRedBillboard : MonoBehaviour
+    {
+        public Material Mat;
+
+        private const float Duration  = 5f;
+        private const float FlashRate = 0.25f;   // seconds per flash half-cycle
+
+        private float _elapsed    = 0f;
+        private float _flashTimer = 0f;
+        private bool  _isRed      = true;
+
+        private static readonly Color RedTint = new Color(1f, 0.15f, 0.15f, 1f);
+
+        void LateUpdate()
+        {
+            if (Camera.main != null)
+                transform.forward = Camera.main.transform.forward;
+
+            _elapsed    += Time.deltaTime;
+            _flashTimer += Time.deltaTime;
+
+            if (_flashTimer >= FlashRate)
+            {
+                _flashTimer -= FlashRate;
+                _isRed = !_isRed;
+                if (Mat != null)
+                    Mat.color = _isRed ? RedTint : Color.white;
+            }
+
+            if (_elapsed >= Duration)
+                Destroy(gameObject);
+        }
+
+        void OnDestroy()
+        {
+            if (Mat != null) UnityEngine.Object.Destroy(Mat);
         }
     }
 }

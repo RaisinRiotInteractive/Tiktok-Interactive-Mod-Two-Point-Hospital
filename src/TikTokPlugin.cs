@@ -132,15 +132,23 @@ namespace TPH_TikTokMod
                     Debug.Log("[TikTokMod] Summoning ghost");
                     GameInterface.SpawnGhost();
                 }
-                else if (command == "KILLPATIENT")
+                else if (command.StartsWith("KILLPATIENT"))
                 {
-                    Debug.Log("[TikTokMod] Killing random patient");
-                    GameInterface.KillRandomPatient();
+                    string payload     = command.Length > 11 && command[11] == ':' ? command.Substring(12) : "";
+                    string[] parts     = payload.Split('|');
+                    string triggerName = parts.Length > 0 && !string.IsNullOrEmpty(parts[0]) ? parts[0] : "";
+                    string avatarPath  = parts.Length > 1 ? parts[1] : "";
+                    Debug.Log($"[TikTokMod] Killing random patient (triggered by: {(string.IsNullOrEmpty(triggerName) ? "unknown" : triggerName)})");
+                    GameInterface.KillRandomPatient(triggerName, avatarPath, this);
                 }
-                else if (command == "FIRESTAFF")
+                else if (command.StartsWith("FIRESTAFF"))
                 {
-                    Debug.Log("[TikTokMod] Firing random staff member");
-                    GameInterface.FireRandomStaff();
+                    string payload     = command.Length > 9 && command[9] == ':' ? command.Substring(10) : "";
+                    string[] parts     = payload.Split('|');
+                    string triggerName = parts.Length > 0 && !string.IsNullOrEmpty(parts[0]) ? parts[0] : "";
+                    string avatarPath  = parts.Length > 1 ? parts[1] : "";
+                    Debug.Log($"[TikTokMod] Firing random staff (triggered by: {(string.IsNullOrEmpty(triggerName) ? "unknown" : triggerName)})");
+                    GameInterface.FireRandomStaff(triggerName, avatarPath, this);
                 }
                 else if (command.StartsWith("SPAWNSTAFF:"))
                 {
