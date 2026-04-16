@@ -141,7 +141,7 @@ namespace TPH_TikTokCompanion
             btnNavRules.Cursor    = System.Windows.Forms.Cursors.Hand;
             btnNavRules.Click    += btnNavRules_Click;
 
-            lblVersion.Text      = "v1.2.0";
+            lblVersion.Text      = "v1.2.5";
             lblVersion.Dock      = System.Windows.Forms.DockStyle.Bottom;
             lblVersion.Height    = 30;
             lblVersion.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;

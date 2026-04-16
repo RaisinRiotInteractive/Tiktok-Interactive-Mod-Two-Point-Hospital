@@ -85,7 +85,7 @@ public class InstallerForm : Form
         };
         pnlHeader.Controls.Add(Lbl("TikTok Live Mod  ·  Two Point Hospital",
             new Font("Segoe UI", 14f, FontStyle.Bold), ColText, new Point(20, 12), new Size(500, 30)));
-        pnlHeader.Controls.Add(Lbl("Interactive mod installer  ·  v1.2.0  by RaisinRiotInteractive",
+        pnlHeader.Controls.Add(Lbl("Interactive mod installer  ·  v1.2.5  by RaisinRiotInteractive",
             new Font("Segoe UI", 9f), ColMuted, new Point(21, 43), new Size(500, 18)));
 
         // ── Path row ──────────────────────────────────────────────────
